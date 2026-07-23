@@ -1,0 +1,91 @@
+services:
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka-kraft
+    ports:
+      - "9092:9092"
+    environment:
+      # Định danh của node trong cụm cluster
+      KAFKA_NODE_ID: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Định nghĩa vai trò của node (vừa làm broker vừa làm controller)
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      # Cấu hình các cổng kết nối nội bộ và bên ngoài
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,INTERNAL://0.0.0.0:9094'
+      # Định nghĩa các listener được quảng cáo cho các client bên ngoài và nội bộ --> trả về địa chỉ mà client có thể kết nối đến
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092,INTERNAL://kafka:9094' 
+      # Bản đồ bảo mật cho các giao thức kết nối
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT'
+      # Cổng dùng cho việc bầu chọn và quản lý cụm (Controller)
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@localhost:9093'
+      # Định cấu hình listener cho controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      # ID duy nhất cho cụm KRaft (phải trùng khớp nếu chạy nhiều node)
+      KAFKA_CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      # Vị trí lưu trữ dữ liệu log
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9094
+    depends_on:
+      - kafka
+
+  clickhouse:
+    image: yandex/clickhouse-server:latest
+    container_name: clickhouse
+    platform: linux/amd64
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+
+  gateway:
+    build: .
+    container_name: gateway
+    ports:
+      - "8000:8000"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9094
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      PANCAKE_WEBHOOK_SECRET: ${PANCAKE_WEBHOOK_SECRET:?set PANCAKE_WEBHOOK_SECRET in .env}
+      PANCAKE_RAW_TOPIC: pancake.raw
+    depends_on:
+      - kafka
+
+  consumer:
+    build: .
+    container_name: consumer
+    command: ["python", "-m", "consumer.main"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9094
+      PANCAKE_RAW_TOPIC: pancake.raw
+      PANCAKE_DLQ_TOPIC: pancake.raw.dlq
+      CONSUMER_GROUP_ID: pancake-raw-consumer
+      BATCH_SIZE: "100"
+      BATCH_FLUSH_SECONDS: "5"
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: "8123"
+    depends_on:
+      - kafka
+      - clickhouse
+
+  debug:
+    image: confluentinc/cp-kafkacat
+    container_name: debug
+    command: sleep infinity
+
+volumes:
+  kafka_data:
+  clickhouse_data:
