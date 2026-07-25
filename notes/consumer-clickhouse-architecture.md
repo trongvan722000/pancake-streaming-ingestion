@@ -116,4 +116,23 @@ docker exec kafka-kraft /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 --topic pancake.raw.dlq --from-beginning
 ```
 
+## 8. Vài hiểu lầm đã tự mắc phải — ghi lại để khỏi lặp lại
+
+1. **"`command:` xảy ra trước/sau lúc build"** — sai khái niệm thời điểm. **Build** chỉ tạo ra **1 image duy nhất** dùng chung cho cả `gateway` lẫn `consumer`, không "chạy" gì cả. Quyết định "dùng `command:` hay `CMD` mặc định trong Dockerfile" xảy ra ở bước **container start** (run), và xảy ra **cùng lúc** cho cả 2 service — không phải cái trước cái sau.
+2. **"`uvicorn gateway.main:app` phải khớp tên service `gateway` trong compose"** — sai. `gateway.main:app` là cú pháp import Python (`tên_thư_mục.tên_file:tên_biến`) trỏ tới file thật trên đĩa container (`/app/gateway/main.py`), hoàn toàn tách biệt khỏi tên service khai trong `docker-compose.yml`. Trùng chữ "gateway" ở cả 2 chỗ chỉ vì tự đặt tên giống nhau cho dễ nhớ, không phải yêu cầu kỹ thuật — đổi tên service thành gì khác, dòng `uvicorn gateway.main:app` vẫn viết y nguyên.
+3. **Bằng chứng thật của 2 điều trên**: từng comment `command:` của `consumer` để test, container tên "consumer" liền chạy nhầm `CMD` mặc định (`uvicorn gateway.main:app`) và crash với `KeyError: 'PANCAKE_WEBHOOK_SECRET'` — vì code gateway cần biến đó, nhưng `environment:` của service `consumer` không hề khai biến này. Tên container không quyết định code chạy; `environment:` cũng là cấu hình **riêng theo từng service**, không tự "theo" code đang chạy bên trong.
+4. **"`consumer.poll()` đọc liên tục nhiều message 1 lúc"** — không chính xác. 1 lần gọi `poll()` chỉ lấy về **tối đa 1 message** (hoặc `None` nếu chưa có gì). Cái "liên tục" tới từ vòng lặp `while True` ở `consumer_event()` gọi `poll()` lặp đi lặp lại, không phải bản thân `poll()` tự động đọc nhiều message cùng lúc.
+5. **"`range(1, 4)` nghĩa là retry 4 lần"** — sai, `range(1, 4)` cho ra `[1, 2, 3]` — đúng **3 lần**, cận trên (`4`) luôn bị loại trừ trong Python `range()`. Lỗi đếm off-by-one kinh điển.
+6. **"Kafka nhận xong message thì ClickHouse có data ngay lập tức"** — sai, luôn có độ trễ tối đa `BATCH_FLUSH_SECONDS` giây ở giữa (consumer cố tình gom batch trước khi insert, không insert từng dòng ngay). Bắn request test xong rồi check ngay lập tức (chưa đủ vài giây) dễ tưởng nhầm "consumer không chạy gì" — thật ra nó chỉ đang gom batch, chưa tới lúc flush.
+
+## 9. Lệnh debug nhanh (tiếp — kiểm tra service nào đang chạy code gì)
+
+```bash
+# Xem service nào build từ Dockerfile nào, command thật sự là gì (sau khi compose merge)
+docker compose config
+
+# Xem container có đang crash-loop không (STATUS phải là "Up", không phải "Restarting")
+docker ps -a --filter name=consumer --format '{{.Names}}: {{.Status}}'
+```
+
 Liên quan: [webhook-fastapi-kafka-producer.md](webhook-fastapi-kafka-producer.md) (webhook/FastAPI/producer/Tunnel), [kafka-listeners.md](kafka-listeners.md) (networking tầng Kafka broker), [plan/pancake-streaming-week1.md](../plan/pancake-streaming-week1.md) (kiến trúc tổng + milestone).

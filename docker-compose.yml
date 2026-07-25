@@ -57,8 +57,6 @@ services:
       - "8000:8000"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9094
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: 9000
       PANCAKE_WEBHOOK_SECRET: ${PANCAKE_WEBHOOK_SECRET:?set PANCAKE_WEBHOOK_SECRET in .env}
       PANCAKE_RAW_TOPIC: pancake.raw
     depends_on:

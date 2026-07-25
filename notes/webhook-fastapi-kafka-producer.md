@@ -101,6 +101,13 @@ cloudflared tunnel --url http://localhost:8000   # chạy foreground, URL in nga
 2. **"Endpoint phải được tạo từ producer/connector của Kafka"** — có tồn tại loại tool làm được vậy thật (Kafka Connect Webhook Source Connector, xem `Platformatory/webhook-source-connector`), nhưng project này **cố tình không dùng** — tự viết FastAPI để luyện kỹ năng, không phải không biết cách khác.
 3. **"poll() là bước lưu data vào broker"** — sai, xem lại mục 4. `produce()` mới là bước bắt đầu gửi (qua background thread), `poll()` chỉ là nghe kết quả.
 4. **"Kafka và Pancake nói chuyện qua webhook"** — sai chủ thể. Webhook là giữa **Pancake và gateway**. Kafka không hề biết Pancake tồn tại, chỉ gateway biết cả 2 bên.
+5. **"`_delivery_report` chỉ chạy/log khi có lỗi"** — sai, callback này xử lý **cả 2 nhánh**: thành công (`else: log "kafka delivered..."`) lẫn thất bại (`if err: log error`). Không phải "im lặng lúc thành công, chỉ lên tiếng lúc lỗi".
+6. **"Producer cũng `poll()` liên tục như Consumer"** — nhầm 2 class khác nhau. Bên `gateway/producer.py`, `_producer.poll(0)` chỉ gọi **đúng 1 lần** trong mỗi request (`produce_event()`), không có vòng lặp `while True` nào ở phía producer cả. Vòng lặp poll liên tục là đặc điểm riêng của **Consumer** (xem [consumer-clickhouse-architecture.md](consumer-clickhouse-architecture.md) mục 4).
+7. **"Producer gom message theo batch, cứ đủ N message mới gửi"** — sai, đó là khái niệm của **consumer** (`BATCH_SIZE=100`). Producer bên gateway gửi **ngay từng message một** mỗi khi có 1 request POST tới, không gom gì cả.
+8. **"`bootstrap.servers` là nơi Kafka lưu message"** — sai, đó chỉ là **địa chỉ để client kết nối vào cluster** (xin metadata ban đầu). `topic` mới là nơi message thật sự được lưu; `broker` là 1 server cụ thể trong cluster giữ dữ liệu đó.
+9. **"POST vào 1 path chỉ có route GET sẽ trả 404"** — sai, FastAPI trả **405 Method Not Allowed** (path tồn tại, chỉ sai method) — khác hẳn 404 (path không tồn tại, hoặc cố tình giả 404 khi secret token sai như `verify_webhook` đang làm).
+10. **`HTTPException(status_code=404)` không truyền `detail=`** — FastAPI tự điền text mặc định theo status code, ra đúng body `{"detail": "Not Found"}` — là hành vi mặc định của framework, không phải bug.
+11. **"Cùng partition nghĩa là cùng consumer group"** — 2 khái niệm hoàn toàn khác nhau, không liên quan gì tới nhau. **Partition** do `key` hash ra, quyết định message rơi vào "ngăn" nào trong 1 topic. **Consumer group** là cơ chế khác hẳn — nhiều consumer cùng group chia nhau đọc 1 topic. Cùng key → cùng partition; không suy ra được gì về consumer group từ đó cả.
 
 ## 8. Lệnh debug nhanh — test thật, đừng đoán
 
