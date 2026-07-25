@@ -60,28 +60,25 @@ Pancake (webhook)
 - Setup docker-compose: Kafka (KRaft), ClickHouse, Kafka UI (provectuslabs/kafka-ui — để debug/demo).
 - Cài `cloudflared`, tạo tunnel trỏ về gateway (localhost lúc đầu để test trước khi có gateway thật).
 
-**M2 — Ingestion gateway (FastAPI)**
-- Endpoint `POST /webhooks/pancake/{secret_token}`.
-- Verify token/signature, trả 200 nhanh.
-- Pydantic model cho envelope (loose/optional fields vì chưa chắc schema đầy đủ).
-- Classify theo `type`, produce Kafka (key=conversation_id, acks=all).
-- Log structured (request id, event type, kafka offset) để trace được từng event.
+**M2 — Ingestion gateway (FastAPI)** ✅ Xong, đã test thật
+- Endpoint `POST /webhooks/pancake/{secret_token}` — [gateway/main.py](../gateway/main.py).
+- Verify token, trả 200 nhanh (không đợi Kafka ACK).
+- Produce Kafka qua [gateway/producer.py](../gateway/producer.py) (tách module riêng), key=conversation_id, acks=all.
+- Log structured (request_id, topic, key, type).
+- **Khác bản gốc**: chưa dùng Pydantic model + chưa classify theo `type` thật — vẫn đẩy hết vào 1 topic raw (`pancake.raw`), vì chưa có sample payload thật từ Pancake (M5 đang bị chặn). Sẽ sửa `_classify_topic`/`_extract_key` khi có payload thật.
 
-**M3 — Kafka topics + consumers**
-- Tạo topics (script hoặc `kafka-topics.sh` trong compose init).
-- Consumer app: đọc, validate, batch insert ClickHouse, commit offset sau khi insert thành công (at-least-once).
-- DLQ: retry N lần rồi đẩy message lỗi + lý do lỗi vào topic `.dlq`.
+**M3 — Kafka topics + consumers** ✅ Xong, đã test thật (kể cả path lỗi)
+- Consumer app — [consumer/consumer.py](../consumer/consumer.py): đọc, batch insert ClickHouse, commit offset sau khi insert thành công (at-least-once).
+- DLQ: retry 3 lần rồi đẩy message lỗi vào `pancake.raw.dlq` — đã test thật bằng cách tắt ClickHouse, xác nhận consumer không crash, tự phục hồi khi ClickHouse sống lại.
+- **Khác bản gốc**: 1 consumer duy nhất đọc 1 topic raw (chưa tách 2 consumer/2 topic riêng conversations/messages — chờ có payload thật mới tách).
 
-**M4 — ClickHouse raw tables**
-- Tạo database `raw`, 2 bảng ReplacingMergeTree như trên.
-- Cân nhắc thêm cột `_kafka_partition`, `_kafka_offset`, `_ingested_at` để trace lineage.
+**M4 — ClickHouse raw tables** ✅ Xong (dạng generic, chưa đúng thiết kế gốc)
+- Database `raw`, bảng `raw.pancake_raw` — có `_kafka_partition`, `_kafka_offset`, `_ingested_at` để trace lineage.
+- **Khác bản gốc**: 1 bảng `MergeTree` chung (chưa phải `ReplacingMergeTree`, chưa tách `pancake_conversations_raw`/`pancake_messages_raw`) — vì chưa có business key thật (`conversation_id`/`message_id` xác nhận từ payload thật) để dedup đúng nghĩa.
 
-**M5 — Đăng ký webhook thật & test end-to-end**
-- Đăng ký URL tunnel vào Pancake dashboard.
-- Gửi event thật, xác nhận đi hết pipeline: Pancake -> tunnel -> gateway -> Kafka (thấy trong Kafka UI) -> ClickHouse có row.
-- Test idempotency: replay cùng 1 event 2 lần, confirm ReplacingMergeTree dedup đúng (`SELECT ... FINAL`).
-- Test lỗi: gửi payload sai schema, confirm rơi vào DLQ thay vì crash consumer.
-- (Nếu kịp) README + sơ đồ kiến trúc — dùng luôn cho phần portfolio/CV.
+**M5 — Đăng ký webhook thật & test end-to-end** ⛔ Đang bị chặn — không phải việc code
+- Cần: (1) gửi `page_id`/URL page cho Pancake support để họ bật tính năng Webhook, (2) kiểm tra Subscription settings còn connection slot trống. 2 việc này ở phía tài khoản Pancake, không làm bằng code được.
+- Chưa làm được: đăng ký URL thật, lấy sample payload thật, test idempotency thật (`SELECT ... FINAL`), test DLQ với lỗi schema thật, README + sơ đồ kiến trúc cho CV.
 
 ## Việc cần xác nhận trước khi code (chưa biết, phải tra doc Pancake)
 - ~~Pancake webhook payload thật sự có field phân biệt loại event không, tên field là gì.~~
