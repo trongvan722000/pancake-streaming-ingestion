@@ -33,7 +33,8 @@ def _fake_event() -> dict:
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok"}
+    return Response(status_code=500)
+    # return {"status": "ok"}
 
 
 @app.post("/simulate")
