@@ -16,7 +16,7 @@ jobs:
         run: docker build -t pancake-simulator ./pancake-simulator 
 
       - name: Run containers 
-        run: docker run -d --name test-pancake -p 8001:8001 -e GATEWAY_URL:"http://localhost:8001" pancake-simulator
+        run: docker run -d --name test-pancake -p 8001:8001 -e GATEWAY_URL="http://localhost:8001" pancake-simulator
 
       - name: Test healthz
         run: |
