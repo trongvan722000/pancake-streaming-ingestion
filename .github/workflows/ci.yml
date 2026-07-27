@@ -4,6 +4,7 @@ on:
   push:
     paths: 
       - "pancake-simulator/**"
+      - .
 
 jobs:
   build-and-test:
