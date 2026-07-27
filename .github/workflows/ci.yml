@@ -34,7 +34,7 @@ jobs:
         run: |
           docker run -d --name pancake-simulator-ci --network ci-test-net \
             -p 8001:8001 \
-            -e GATEWAY_URL="http://gateway-test-ci:9094/webhooks/pancake/ci-test-secret"\
+            -e GATEWAY_URL="http://gateway-test-ci:8000/webhooks/pancake/ci-test-secret"\
             pancake-simulator
       
       - name: Run test healthz pancake simulate
