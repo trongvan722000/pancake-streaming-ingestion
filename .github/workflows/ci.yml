@@ -22,19 +22,19 @@ jobs:
       
       - name: Docker run gateway
         run: |
-        docker run -d --name gateway-test-ci --network ci-test-net \
-          -e KAFKA_BOOTSTRAP_SERVERS="kafka:9094" \
-          -e PANCAKE_WEBHOOK_SECRET="ci-test-secret" \
-          -e PANCAKE_RAW_TOPIC="pancake.raw" \
-          gateway-test
+          docker run -d --name gateway-test-ci --network ci-test-net \
+            -e KAFKA_BOOTSTRAP_SERVERS="kafka:9094" \
+            -e PANCAKE_WEBHOOK_SECRET="ci-test-secret" \
+            -e PANCAKE_RAW_TOPIC="pancake.raw" \
+            gateway-test
       
       
       - name: Docker run pancake-simulator
         run: |
-        docker run -d --name pancake-simulator-ci --network ci-test-net \
-          -p 8001:8001 \
-          -e GATEWAY_URL="http://gateway-test-ci:9094/webhooks/pancake/ci-test-secret"\
-          pancake-simulator
+          docker run -d --name pancake-simulator-ci --network ci-test-net \
+            -p 8001:8001 \
+            -e GATEWAY_URL="http://gateway-test-ci:9094/webhooks/pancake/ci-test-secret"\
+            pancake-simulator
       
       - name: Run test healthz pancake simulate
         run: |
