@@ -1,24 +1,48 @@
 name: CI pancake-simulator 
 
-on:
+on: 
   push:
-    paths:
-      - 'pancake-simulator/**'
+    paths: 
+      - "pancake-simulator/**"
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Docker images 
-        run: docker build -t pancake-simulator ./pancake-simulator 
-
-      - name: Run containers 
-        run: docker run -d --name test-pancake -p 8001:8001 -e GATEWAY_URL="http://localhost:8001" pancake-simulator
-
-      - name: Test healthz
+      - uses: actions/checkout@v3 
+    
+      - name: Build Simulate Images 
+        run: docker build -t pancake-simulator ./pancake-simulator
+      
+      - name: Build Gateway Image
+        run: docker build -t gateway-test .
+      
+      - name: Create Network
+        run: docker network create ci-test-net
+      
+      - name: Docker run gateway
+        run: |
+          docker run -d --name gateway-test-ci --network ci-test-net \
+            -e KAFKA_BOOTSTRAP_SERVERS="kafka:9094" \
+            -e PANCAKE_WEBHOOK_SECRET="ci-test-secret" \
+            -e PANCAKE_RAW_TOPIC="pancake.raw" \
+            gateway-test
+      
+      
+      - name: Docker run pancake-simulator
+        run: |
+          docker run -d --name pancake-simulator-ci --network ci-test-net \
+            -p 8001:8001 \
+            -e GATEWAY_URL="http://gateway-test-ci:9094/webhooks/pancake/ci-test-secret"\
+            pancake-simulator
+      
+      - name: Run test healthz pancake simulate
         run: |
           sleep 5
-          curl -f http://localhost:8001/healthz
+          curl -f "http://localhost:8001/healthz"
+
+      - name: Run test Pancake to gateway 
+        run: |
+          sleep 5
+          response=$(curl -f -X POST "http://localhost:8001/simulate?count=2")
+          echo "$response" | jq -e '[.results[].status_code] | all(. == 200)'
