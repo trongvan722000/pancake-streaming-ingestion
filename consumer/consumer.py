@@ -3,7 +3,7 @@ import os
 import signal
 import time
 
-import clickhouse_connect
+from clickhouse_driver import Client
 from confluent_kafka import Consumer, Producer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -16,17 +16,25 @@ GROUP_ID = os.environ.get("CONSUMER_GROUP_ID", "pancake-raw-consumer")
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "100"))
 BATCH_FLUSH_SECONDS = float(os.environ.get("BATCH_FLUSH_SECONDS", "5"))
 
-# clickhouse-connect nói chuyện qua HTTP interface (port 8123), KHÔNG phải
-# native protocol (port 9000) -- 2 cổng khác giao thức, không dùng lẫn được.
-CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", "clickhouse")
-CLICKHOUSE_HTTP_PORT = int(os.environ.get("CLICKHOUSE_HTTP_PORT", "8123"))
 
-_clickhouse = clickhouse_connect.get_client(host=CLICKHOUSE_HOST, port=CLICKHOUSE_HTTP_PORT)
+# clickhouse-driver nói native protocol -- port này KHÁC port HTTP (8123),
+# không dùng lẫn được (bài học cũ: 2 giao thức, 2 port khác nhau).
+CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", "clickhouse")
+CLICKHOUSE_PORT = int(os.environ.get("CLICKHOUSE_PORT", "9000"))
+CLICKHOUSE_USER = os.environ.get("CLICKHOUSE_USER", "default")
+CLICKHOUSE_PASSWORD = os.environ.get("CLICKHOUSE_PASSWORD", "")
+
+_clickhouse = Client(
+    host=CLICKHOUSE_HOST,
+    port=CLICKHOUSE_PORT,
+    user=CLICKHOUSE_USER,
+    password=CLICKHOUSE_PASSWORD,
+)
 
 
 def _ensure_schema():
-    _clickhouse.command("CREATE DATABASE IF NOT EXISTS raw")
-    _clickhouse.command(
+    _clickhouse.execute("CREATE DATABASE IF NOT EXISTS raw")
+    _clickhouse.execute(
         """
         CREATE TABLE IF NOT EXISTS raw.pancake_raw
         (
@@ -77,20 +85,19 @@ def _send_to_dlq(batch, reason):
 
 def _process_batch(batch):
     rows = [
-        [
+        (
             item["value"].decode("utf-8", errors="replace") if item["value"] else "",
             item["partition"],
             item["offset"],
-        ]
+        )
         for item in batch
     ]
 
     # Không tự bắt exception ở đây -- lỗi phải raise lên cho _flush_batch
     # thấy để nó retry/đẩy DLQ đúng như đã thiết kế.
-    _clickhouse.insert(
-        "raw.pancake_raw",
-        data=rows,
-        column_names=["raw_payload", "_kafka_partition", "_kafka_offset"],
+    _clickhouse.execute(
+        "INSERT INTO raw.pancake_raw (raw_payload, _kafka_partition, _kafka_offset) VALUES",
+        rows,
     )
 
     logger.info(
