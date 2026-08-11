@@ -33,7 +33,7 @@ services:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
     ports:
-      - "8080:8080"
+      - "8090:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9094
@@ -57,10 +57,10 @@ services:
     
 
   gateway:
-    build: .
+    image: ghcr.io/trongvan722000/pancake-streaming-ingestion-gateway:${IMAGE_TAG:-latest}
     container_name: gateway
     ports:
-      - "8000:8000"
+      - "8002:8000"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9094
       PANCAKE_WEBHOOK_SECRET: ${PANCAKE_WEBHOOK_SECRET:?set PANCAKE_WEBHOOK_SECRET in .env}
@@ -69,7 +69,7 @@ services:
       - kafka
 
   pancake-simulator:
-    build: ./pancake-simulator
+    image: ghcr.io/trongvan722000/pancake-streaming-ingestion-simulator:${IMAGE_TAG:-latest}
     container_name: pancake-simulator
     ports:
       - "8001:8001"
@@ -79,7 +79,7 @@ services:
       - gateway
 
   consumer:
-    build: .
+    image: ghcr.io/trongvan722000/pancake-streaming-ingestion-gateway:${IMAGE_TAG:-latest}
     container_name: consumer
     command: ["python", "-m", "consumer.main"]
     environment:

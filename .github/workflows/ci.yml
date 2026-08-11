@@ -42,8 +42,44 @@ jobs:
           sleep 5
           curl -f "http://localhost:8001/healthz"
 
-      - name: Run test Pancake to gateway 
+      - name: Run test Pancake to gateway
         run: |
           sleep 5
           response=$(curl -f -X POST "http://localhost:8001/simulate?count=2")
           echo "$response" | jq -e '[.results[].status_code] | all(. == 200)'
+
+  publish-and-deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push gateway/consumer image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}-gateway:latest \
+                        -t ghcr.io/${{ github.repository }}-gateway:${{ github.sha }} .
+          docker push ghcr.io/${{ github.repository }}-gateway:latest
+          docker push ghcr.io/${{ github.repository }}-gateway:${{ github.sha }}
+
+      - name: Build and push pancake-simulator image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}-simulator:latest \
+                        -t ghcr.io/${{ github.repository }}-simulator:${{ github.sha }} ./pancake-simulator
+          docker push ghcr.io/${{ github.repository }}-simulator:latest
+          docker push ghcr.io/${{ github.repository }}-simulator:${{ github.sha }}
+
+      - name: Trigger Coolify deploy
+        run: |
+          curl --fail -X GET "${{ secrets.COOLIFY_WEBHOOK_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}"
