@@ -33,10 +33,10 @@ _clickhouse = Client(
 
 
 def _ensure_schema():
-    _clickhouse.execute("CREATE DATABASE IF NOT EXISTS raw")
+    _clickhouse.execute("CREATE DATABASE IF NOT EXISTS dw")
     _clickhouse.execute(
         """
-        CREATE TABLE IF NOT EXISTS raw.pancake_raw
+        CREATE TABLE IF NOT EXISTS dw.raw_pancake
         (
             raw_payload      String,
             _kafka_partition Int32,
@@ -96,7 +96,7 @@ def _process_batch(batch):
     # Không tự bắt exception ở đây -- lỗi phải raise lên cho _flush_batch
     # thấy để nó retry/đẩy DLQ đúng như đã thiết kế.
     _clickhouse.execute(
-        "INSERT INTO raw.pancake_raw (raw_payload, _kafka_partition, _kafka_offset) VALUES",
+        "INSERT INTO dw.raw_pancake (raw_payload, _kafka_partition, _kafka_offset) VALUES",
         rows,
     )
 
