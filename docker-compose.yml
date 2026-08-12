@@ -28,6 +28,12 @@ services:
       KAFKA_LOG_DIRS: '/var/lib/kafka/data'
     volumes:
       - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -65,7 +71,8 @@ services:
       PANCAKE_WEBHOOK_SECRET: ${PANCAKE_WEBHOOK_SECRET:?set PANCAKE_WEBHOOK_SECRET in .env}
       PANCAKE_RAW_TOPIC: pancake.raw
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
 
   pancake-simulator:
     image: ghcr.io/trongvan722000/pancake-streaming-ingestion-simulator:${IMAGE_TAG:-latest}
@@ -94,7 +101,7 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
     depends_on:
       kafka:
-        condition: service_started
+        condition: service_healthy
       clickhouse:
         condition: service_healthy
 
