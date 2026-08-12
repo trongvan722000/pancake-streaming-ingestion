@@ -41,9 +41,8 @@ services:
       - kafka
 
   clickhouse:
-    image: yandex/clickhouse-server:latest
+    image: clickhouse/clickhouse-server:24.8
     container_name: clickhouse
-    platform: linux/amd64
     ports:
       - "8123:8123"
       - "9000:9000"
