@@ -63,6 +63,7 @@ services:
 
   gateway:
     image: ghcr.io/trongvan722000/pancake-streaming-ingestion-gateway:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: gateway
     ports:
       - "8002:8000"
@@ -76,6 +77,7 @@ services:
 
   pancake-simulator:
     image: ghcr.io/trongvan722000/pancake-streaming-ingestion-simulator:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: pancake-simulator
     ports:
       - "8001:8001"
@@ -86,6 +88,7 @@ services:
 
   consumer:
     image: ghcr.io/trongvan722000/pancake-streaming-ingestion-gateway:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: consumer
     command: ["python", "-m", "consumer.main"]
     environment:
